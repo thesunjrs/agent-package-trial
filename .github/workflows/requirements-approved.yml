@@ -1,0 +1,21 @@
+name: Requirements Approved
+
+on:
+  repository_dispatch:
+    types: [requirements-approved]
+
+jobs:
+  on-approval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log approval details
+        run: |
+          echo "Project: ${{ github.event.client_payload.project_slug }}"
+          echo "Jira tickets: ${{ github.event.client_payload.jira_tickets }}"
+          echo "Timestamp: ${{ github.event.client_payload.timestamp }}"
+
+      - name: Next steps placeholder
+        run: echo "Requirements approved — downstream pipeline triggered."
