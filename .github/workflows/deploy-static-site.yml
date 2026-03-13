@@ -34,12 +34,12 @@ jobs:
       - name: Validate CloudFormation template
         run: |
           aws cloudformation validate-template \
-            --template-body file://cloudformation/github-actions-site.yaml
+            --template-body file://aws-deployment-github-actions-test/cloudformation/static-site.yaml
       
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \
-            --template-file cloudformation/github-actions-site.yaml \
+            --template-file aws-deployment-github-actions-test/cloudformation/static-site.yaml \
             --stack-name ${{ env.STACK_NAME }} \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --no-fail-on-empty-changeset \
@@ -57,7 +57,7 @@ jobs:
       
       - name: Sync website files to S3
         run: |
-          aws s3 sync github-actions-site/ s3://${{ steps.get-bucket.outputs.bucket_name }}/ \
+          aws s3 sync aws-deployment-github-actions-test/site/ s3://${{ steps.get-bucket.outputs.bucket_name }}/ \
             --delete \
             --region ${{ env.AWS_REGION }}
       

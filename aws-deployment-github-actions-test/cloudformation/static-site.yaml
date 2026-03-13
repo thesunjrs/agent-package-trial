@@ -32,6 +32,8 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: Purpose
+          Value: GitHubActionsTest
 
   OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -99,6 +101,8 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: Purpose
+          Value: GitHubActionsTest
 
 Outputs:
   BucketName:
