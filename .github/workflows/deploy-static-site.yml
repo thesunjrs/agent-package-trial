@@ -1,0 +1,101 @@
+name: Deploy to AWS S3 + CloudFront
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: github-actions-site-dev
+  ENVIRONMENT: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Validate CloudFormation template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://cloudformation/github-actions-site.yaml
+      
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/github-actions-site.yaml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --no-fail-on-empty-changeset \
+            --region ${{ env.AWS_REGION }}
+      
+      - name: Get S3 bucket name
+        id: get-bucket
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" \
+            --output text)
+          echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Sync website files to S3
+        run: |
+          aws s3 sync github-actions-site/ s3://${{ steps.get-bucket.outputs.bucket_name }}/ \
+            --delete \
+            --region ${{ env.AWS_REGION }}
+      
+      - name: Get CloudFront distribution ID
+        id: get-distribution
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text)
+          echo "distribution_id=$DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+      
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.get-distribution.outputs.distribution_id }} \
+            --paths "/*"
+      
+      - name: Get website URL
+        id: get-url
+        run: |
+          WEBSITE_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteURL'].OutputValue" \
+            --output text)
+          echo "website_url=$WEBSITE_URL" >> $GITHUB_OUTPUT
+      
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack Name:** ${{ env.STACK_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Website URL:** ${{ steps.get-url.outputs.website_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Bucket:** ${{ steps.get-bucket.outputs.bucket_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CloudFront Distribution:** ${{ steps.get-distribution.outputs.distribution_id }}" >> $GITHUB_STEP_SUMMARY
